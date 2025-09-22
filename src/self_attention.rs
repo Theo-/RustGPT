@@ -44,6 +44,29 @@ impl SelfAttention {
         }
     }
 
+    #[allow(dead_code)]
+    pub fn new_with_weights(
+        embedding_dim: usize,
+        w_q: Array2<f32>,
+        w_k: Array2<f32>,
+        w_v: Array2<f32>,
+    ) -> Self {
+        assert_eq!(w_q.dim(), (embedding_dim, embedding_dim));
+        assert_eq!(w_k.dim(), (embedding_dim, embedding_dim));
+        assert_eq!(w_v.dim(), (embedding_dim, embedding_dim));
+
+        SelfAttention {
+            embedding_dim,
+            w_q,
+            w_k,
+            w_v,
+            cached_input: None,
+            optimizer_w_q: Adam::new((embedding_dim, embedding_dim)),
+            optimizer_w_k: Adam::new((embedding_dim, embedding_dim)),
+            optimizer_w_v: Adam::new((embedding_dim, embedding_dim)),
+        }
+    }
+
     fn compute_qkv(&self, input: &Array2<f32>) -> (Array2<f32>, Array2<f32>, Array2<f32>) {
         let q = input.dot(&self.w_q); // Q = X * W_Q
         let k = input.dot(&self.w_k); // K = X * W_K
@@ -159,8 +182,8 @@ impl Layer for SelfAttention {
         let grad_scores = SelfAttention::softmax_backward(&attn_weights, &grad_attn_weights); // [seq_len, seq_len]
 
         // Step 3: ∂L/∂Q and ∂L/∂K
-        let grad_q = grad_scores.dot(&k);
-        let grad_k = grad_scores.t().dot(&q);
+        let grad_q = grad_scores.dot(&k) / scale;
+        let grad_k = grad_scores.t().dot(&q) / scale;
 
         // Step 4: ∂L/∂W_q/W_k/W_v
         let grad_w_q = input.t().dot(&grad_q);
